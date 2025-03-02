@@ -1,5 +1,24 @@
+/*
+ * Copyright © 2025 Ryan Jeffares
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+ * documentation files (the “Software”), to deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+ * Software.
+ *
+ * THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+ * WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+ * OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+ * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 #ifndef SERPP_PARSE_HPP
 #define SERPP_PARSE_HPP
+
+#include "json.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -12,8 +31,10 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <vector>
 
-namespace serpp::parse {
+namespace serpp::json {
 enum class error_type {
     expected_token,
     invalid_token,
@@ -180,18 +201,20 @@ inline auto poll_text(std::string_view& source, std::size_t len) noexcept -> std
     }
 }
 
-[[nodiscard]] inline auto parse_array(std::string_view& source) noexcept -> std::expected<void, parse_error>;
-[[nodiscard]] inline auto parse_object(std::string_view& source) noexcept -> std::expected<void, parse_error>;
-[[nodiscard]] inline auto parse_value(std::string_view& source) noexcept -> std::expected<void, parse_error>;
-[[nodiscard]] inline auto parse_value(std::string_view& source, token token) noexcept -> std::expected<void, parse_error>;
+[[nodiscard]] inline auto parse_array(std::string_view& source) noexcept -> std::expected<json, parse_error>;
+[[nodiscard]] inline auto parse_object(std::string_view& source) noexcept -> std::expected<json, parse_error>;
+[[nodiscard]] inline auto parse_value(std::string_view& source) noexcept -> std::expected<json, parse_error>;
+[[nodiscard]] inline auto parse_value(std::string_view& source, token token) noexcept -> std::expected<json,
+parse_error>;
 
-inline auto parse_array(std::string_view& source) noexcept -> std::expected<void, parse_error> {
+inline auto parse_array(std::string_view& source) noexcept -> std::expected<json, parse_error> {
     enum class last_element {
         comma,
         none,
         value,
     };
 
+    std::vector<json> array;
     last_element last_element = last_element::none;
 
     while (const auto token = scan_token(source)) {
@@ -214,12 +237,13 @@ inline auto parse_array(std::string_view& source) noexcept -> std::expected<void
                 };
             }
 
-            return {};
+            return array;
         } else {
             auto value = parse_value(source, *token);
             if (!value) {
                 return value;
             }
+            array.emplace_back(std::move(*value));
 
             last_element = last_element::value;
         }
@@ -233,13 +257,14 @@ inline auto parse_array(std::string_view& source) noexcept -> std::expected<void
     };
 }
 
-inline auto parse_object(std::string_view& source) noexcept -> std::expected<void, parse_error> {
+inline auto parse_object(std::string_view& source) noexcept -> std::expected<json, parse_error> {
     enum class last_element {
         comma,
         none,
         value,
     };
 
+    std::unordered_map<std::string, json> object;
     last_element last_element = last_element::none;
 
     while (const auto token = scan_token(source)) {
@@ -262,7 +287,7 @@ inline auto parse_object(std::string_view& source) noexcept -> std::expected<voi
                 };
             }
 
-            return {};
+            return object;
         } else {
             if (token->token_type != token_type::string) {
                 return std::unexpected<parse_error>{
@@ -271,6 +296,8 @@ inline auto parse_object(std::string_view& source) noexcept -> std::expected<voi
                     std::format("expected string but got '{}'", token->text),
                 };
             }
+
+            const auto [it, _] = object.insert_or_assign(std::string{ token->text }, json{});
 
             const auto colon = scan_token(source);
             if (!colon) {
@@ -288,10 +315,11 @@ inline auto parse_object(std::string_view& source) noexcept -> std::expected<voi
                 };
             }
 
-            const auto value = parse_value(source);
+            auto value = parse_value(source);
             if (!value) {
                 return value;
             }
+            it->second = std::move(*value);
 
             last_element = last_element::value;
         }
@@ -305,7 +333,7 @@ inline auto parse_object(std::string_view& source) noexcept -> std::expected<voi
     };
 }
 
-inline auto parse_value(std::string_view& source) noexcept -> std::expected<void, parse_error> {
+inline auto parse_value(std::string_view& source) noexcept -> std::expected<json, parse_error> {
     if (const auto token = scan_token(source)) {
         return parse_value(source, *token);
     } else {
@@ -317,7 +345,7 @@ inline auto parse_value(std::string_view& source) noexcept -> std::expected<void
     }
 }
 
-inline auto parse_value(std::string_view& source, token token) noexcept -> std::expected<void, parse_error> {
+inline auto parse_value(std::string_view& source, token token) noexcept -> std::expected<json, parse_error> {
     switch (token.token_type) {
         case token_type::brace_left:
             return parse_object(source);
@@ -325,15 +353,15 @@ inline auto parse_value(std::string_view& source, token token) noexcept -> std::
             return parse_array(source);
         case token_type::false_value:
             std::cout << std::boolalpha << false << std::endl;
-            return {};
+            return false;
         case token_type::number:
+            return std::strtod(token.text.data(), nullptr);
         case token_type::null:
+            return json{};
         case token_type::string:
-            std::cout << token.text << std::endl;
-            return {};
+            return std::string{ token.text };
         case token_type::true_value:
-            std::cout << std::boolalpha << true << std::endl;
-            return {};
+            return true;
         default:
             return std::unexpected<parse_error>{
                 std::in_place,
@@ -344,7 +372,7 @@ inline auto parse_value(std::string_view& source, token token) noexcept -> std::
 }
 } // namespace detail
 
-inline auto parse(std::string_view source) noexcept -> std::expected<void, parse_error> {
+inline auto parse(std::string_view source) noexcept -> std::expected<json, parse_error> {
     using namespace detail;
 
     const auto first_token = scan_token(source);
@@ -366,6 +394,6 @@ inline auto parse(std::string_view source) noexcept -> std::expected<void, parse
             };
     }
 }
-} // namespace serpp::parse
+} // namespace serpp::json
 
 #endif // #ifndef SERPP_PARSE_HPP
