@@ -1,0 +1,7 @@
+{
+  "name": "Ryan Jeffares",
+  "age": 25,
+  "numbers": [0, 1, 2, 3],
+  "gender": null,
+  "alive": true
+}

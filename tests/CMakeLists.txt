@@ -1,4 +1,4 @@
-add_executable(tests parse_tests.cpp)
+add_executable(tests json_parse_tests.cpp)
 
 target_include_directories(tests PRIVATE ../include)
 target_link_libraries(tests PRIVATE Catch2::Catch2WithMain)

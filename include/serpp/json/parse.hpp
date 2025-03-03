@@ -27,7 +27,6 @@
 #include <exception>
 #include <expected>
 #include <format>
-#include <iostream>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -57,15 +56,19 @@ inline auto error_type_to_string(error_type error_type) noexcept -> std::string_
 class parse_error : public std::exception {
 public:
     parse_error(error_type error_type, std::string_view message)
-        : m_message{ std::format("{}: {}", error_type_to_string(error_type), message) } {
-
-    }
+        : m_error_type{ error_type }
+        , m_message{ std::format("{}: {}", error_type_to_string(error_type), message) } {}
 
     [[nodiscard]] auto what() const noexcept -> const char* override {
         return m_message.c_str();
     }
 
+    [[nodiscard]] auto type() const noexcept -> error_type {
+        return m_error_type;
+    }
+
 private:
+    error_type m_error_type;
     std::string m_message;
 };
 
@@ -143,7 +146,7 @@ inline auto poll_text(std::string_view& source, std::size_t len) noexcept -> std
 [[nodiscard]] inline auto scan_number(std::string_view& source) noexcept -> std::optional<token> {
     // TODO
     std::size_t i = 0;
-    while (std::isdigit(source[i]) != 0) {
+    while (i < source.size() && std::isdigit(source[i])) {
         i++;
     }
 
@@ -155,20 +158,30 @@ inline auto poll_text(std::string_view& source, std::size_t len) noexcept -> std
         if (source[i] == '"' && source[i - 1] != '\\') {
             const auto text = source.substr(1, i - 1);
             source = source.substr(i + 1);
-
-            if (text == "true") {
-                return std::make_optional<token>(token_type::true_value, text);
-            } else if (text == "false") {
-                return std::make_optional<token>(token_type::false_value, text);
-            } else if (text == "null") {
-                return std::make_optional<token>(token_type::null, text);
-            } else {
-                return std::make_optional<token>(token_type::string, text);
-            }
+            return std::make_optional<token>(token_type::string, text);
         }
     }
 
     return std::make_optional<token>(token_type::error, source.substr(0, 1));
+}
+
+[[nodiscard]] inline auto scan_literal(std::string_view& source) noexcept -> std::optional<token> {
+    std::size_t i = 0;
+    while (i < source.size() && std::isalpha(source[i])) {
+        i++;
+    }
+
+    const auto literal = poll_text(source, i);
+
+    if (literal == "true") {
+        return std::make_optional<token>(token_type::true_value, literal);
+    } else if (literal == "false") {
+        return std::make_optional<token>(token_type::false_value, literal);
+    } else if (literal == "null") {
+        return std::make_optional<token>(token_type::null, literal);
+    } else {
+        return std::make_optional<token>(token_type::error, literal);
+    }
 }
 
 [[nodiscard]] inline auto scan_token(std::string_view& source) noexcept -> std::optional<token> {
@@ -195,6 +208,8 @@ inline auto poll_text(std::string_view& source, std::size_t len) noexcept -> std
         default:
             if (std::isdigit(source.front())) {
                 return scan_number(source);
+            } else if (std::isalpha(source.front())) {
+                return scan_literal(source);
             } else {
                 return std::make_optional<token>(token_type::error, poll_text(source, 1));
             }
@@ -204,8 +219,10 @@ inline auto poll_text(std::string_view& source, std::size_t len) noexcept -> std
 [[nodiscard]] inline auto parse_array(std::string_view& source) noexcept -> std::expected<json, parse_error>;
 [[nodiscard]] inline auto parse_object(std::string_view& source) noexcept -> std::expected<json, parse_error>;
 [[nodiscard]] inline auto parse_value(std::string_view& source) noexcept -> std::expected<json, parse_error>;
-[[nodiscard]] inline auto parse_value(std::string_view& source, token token) noexcept -> std::expected<json,
-parse_error>;
+[[nodiscard]] inline auto parse_value(
+    std::string_view& source,
+    const token& token
+) noexcept -> std::expected<json, parse_error>;
 
 inline auto parse_array(std::string_view& source) noexcept -> std::expected<json, parse_error> {
     enum class last_element {
@@ -214,7 +231,8 @@ inline auto parse_array(std::string_view& source) noexcept -> std::expected<json
         value,
     };
 
-    std::vector<json> array;
+    auto j = array();
+    auto& array = j.array().get();
     last_element last_element = last_element::none;
 
     while (const auto token = scan_token(source)) {
@@ -237,7 +255,7 @@ inline auto parse_array(std::string_view& source) noexcept -> std::expected<json
                 };
             }
 
-            return array;
+            return j;
         } else {
             auto value = parse_value(source, *token);
             if (!value) {
@@ -252,8 +270,8 @@ inline auto parse_array(std::string_view& source) noexcept -> std::expected<json
     // made it to EOF without finding a matching bracket
     return std::unexpected<parse_error>{
         std::in_place,
-        error_type::syntax_error,
-        "unterminated array, expected ']'",
+        error_type::expected_token,
+        "unterminated json, expected ']'",
     };
 }
 
@@ -264,7 +282,8 @@ inline auto parse_object(std::string_view& source) noexcept -> std::expected<jso
         value,
     };
 
-    std::unordered_map<std::string, json> object;
+    auto j = object();
+    auto& object = j.object().get();
     last_element last_element = last_element::none;
 
     while (const auto token = scan_token(source)) {
@@ -287,30 +306,30 @@ inline auto parse_object(std::string_view& source) noexcept -> std::expected<jso
                 };
             }
 
-            return object;
+            return j;
         } else {
             if (token->token_type != token_type::string) {
                 return std::unexpected<parse_error>{
                     std::in_place,
-                    error_type::syntax_error,
+                    error_type::invalid_token,
                     std::format("expected string but got '{}'", token->text),
                 };
             }
 
-            const auto [it, _] = object.insert_or_assign(std::string{ token->text }, json{});
+            const auto [it, _] = object.insert_or_assign(std::string{ token->text }, json());
 
             const auto colon = scan_token(source);
             if (!colon) {
                 return std::unexpected<parse_error>{
                     std::in_place,
-                    error_type::syntax_error,
+                    error_type::invalid_token,
                     std::format("expected ':' but got '{}'", colon->text),
                 };
             }
             if (colon->token_type != token_type::colon) {
                 return std::unexpected<parse_error>{
                     std::in_place,
-                    error_type::syntax_error,
+                    error_type::invalid_token,
                     std::format("expected ':' but got '{}'", colon->text),
                 };
             }
@@ -328,7 +347,7 @@ inline auto parse_object(std::string_view& source) noexcept -> std::expected<jso
     // made it to EOF without finding a matching bracket
     return std::unexpected<parse_error>{
         std::in_place,
-        error_type::syntax_error,
+        error_type::expected_token,
         "unterminated object, expected '}'",
     };
 }
@@ -339,25 +358,24 @@ inline auto parse_value(std::string_view& source) noexcept -> std::expected<json
     } else {
         return std::unexpected<parse_error>{
             std::in_place,
-            error_type::syntax_error,
+            error_type::expected_token,
             "expected value but got end of text",
         };
     }
 }
 
-inline auto parse_value(std::string_view& source, token token) noexcept -> std::expected<json, parse_error> {
+inline auto parse_value(std::string_view& source, const token& token) noexcept -> std::expected<json, parse_error> {
     switch (token.token_type) {
         case token_type::brace_left:
             return parse_object(source);
         case token_type::bracket_left:
             return parse_array(source);
         case token_type::false_value:
-            std::cout << std::boolalpha << false << std::endl;
             return false;
         case token_type::number:
             return std::strtod(token.text.data(), nullptr);
         case token_type::null:
-            return json{};
+            return nullptr;
         case token_type::string:
             return std::string{ token.text };
         case token_type::true_value:
@@ -365,7 +383,7 @@ inline auto parse_value(std::string_view& source, token token) noexcept -> std::
         default:
             return std::unexpected<parse_error>{
                 std::in_place,
-                error_type::syntax_error,
+                error_type::invalid_token,
                 std::format("invalid value '{}'", token.text),
             };
     }
@@ -375,23 +393,10 @@ inline auto parse_value(std::string_view& source, token token) noexcept -> std::
 inline auto parse(std::string_view source) noexcept -> std::expected<json, parse_error> {
     using namespace detail;
 
-    const auto first_token = scan_token(source);
-
-    if (!first_token.has_value()) {
+    if (const auto first_token = scan_token(source)) {
+        return parse_value(source, *first_token);
+    } else {
         return {};
-    }
-
-    switch (first_token->token_type) {
-        case token_type::brace_left:
-            return parse_object(source);
-        case token_type::bracket_left:
-            return parse_array(source);
-        default:
-            return std::unexpected<parse_error>{
-                std::in_place,
-                error_type::syntax_error,
-                "expected '[' or '{' at start of JSON",
-            };
     }
 }
 } // namespace serpp::json
