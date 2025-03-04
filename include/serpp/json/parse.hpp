@@ -316,8 +316,6 @@ inline auto parse_object(std::string_view& source) noexcept -> std::expected<jso
                 };
             }
 
-            const auto [it, _] = object.insert_or_assign(std::string{ token->text }, json());
-
             const auto colon = scan_token(source);
             if (!colon) {
                 return std::unexpected<parse_error>{
@@ -338,8 +336,8 @@ inline auto parse_object(std::string_view& source) noexcept -> std::expected<jso
             if (!value) {
                 return value;
             }
-            it->second = std::move(*value);
 
+            object.insert_or_assign(token->text, std::move(*value));
             last_element = last_element::value;
         }
     }

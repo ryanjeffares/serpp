@@ -18,6 +18,10 @@
 #ifndef SERPP_JSON_HPP
 #define SERPP_JSON_HPP
 
+#include "hash_map.hpp"
+#include "optional_ref.hpp"
+
+#include <algorithm>
 #include <concepts>
 #include <cstddef>
 #include <initializer_list>
@@ -29,48 +33,6 @@
 #include <vector>
 
 namespace serpp::json {
-template<typename T>
-class optional_ref {
-public:
-    optional_ref() = default;
-    /* implicit */ optional_ref(T& value) : m_value{ &value } {}
-
-    [[nodiscard]] auto operator=(const optional_ref& other) noexcept -> optional_ref& {
-        if (this != &other) {
-            m_value = other.m_value;
-        }
-
-        return *this;
-    }
-
-    [[nodiscard]] auto has_value() const noexcept -> bool {
-        return m_value != nullptr;
-    }
-
-    [[nodiscard]] operator bool() const noexcept {
-        return has_value();
-    }
-
-    [[nodiscard]] auto get() const noexcept -> T& {
-        return *m_value;
-    }
-
-    [[nodiscard]] operator T&() const noexcept {
-        return get();
-    }
-
-    [[nodiscard]] auto operator*() const noexcept -> T& {
-        return get();
-    }
-
-    [[nodiscard]] auto operator->() const noexcept -> T* {
-        return m_value;
-    }
-
-private:
-    T* m_value;
-};
-
 class json {
 public:
     enum class type {
@@ -84,6 +46,29 @@ public:
 
     json() = default;
 
+    explicit json(type type) {
+        switch (type) {
+            case type::null:
+                m_data.emplace<std::nullptr_t>();
+                break;
+            case type::number:
+                m_data.emplace<double>();
+                break;
+            case type::boolean:
+                m_data.emplace<bool>();
+                break;
+            case type::string:
+                m_data.emplace<std::string>();
+                break;
+            case type::array:
+                m_data.emplace<std::vector<json>>();
+                break;
+            case type::object:
+                m_data.emplace<detail::hash_map<json>>();
+                break;
+        }
+    }
+
     template<typename T> requires std::convertible_to<T, double>
     /* implicit */ json(T&& value) : m_data{ static_cast<double>(std::forward<T>(value)) } {}
 
@@ -94,10 +79,28 @@ public:
     template<typename... Args> requires std::constructible_from<std::string, Args...>
     /* implicit */ json(Args&&... args) : m_data{ std::string{ std::forward<Args>(args)... } } {}
 
-    /* implicit */ json(std::initializer_list<json> elems) : m_data{ std::vector<json>{ elems } } {}
+    /* implicit */ json(std::initializer_list<json> elems) {
+        if (std::ranges::all_of(elems, [] (const auto& el) {
+            if (el.type() != type::array) {
+                return false;
+            }
 
-    /* implicit */ json(std::initializer_list<std::pair<const std::string, json>> pairs)
-        : m_data{ std::unordered_map<std::string, json>{ pairs } } {}
+            const auto& array = *el.array();
+            return array.size() == 2 && array[0].type() == type::string;
+        })) {
+            // all elements are pairs, so make this an object
+            m_data.emplace<detail::hash_map<json>>();
+            auto& map = *object();
+
+            for (auto& pair : elems) {
+                auto& array = *pair.array();
+                map.insert_or_assign(*array[0].string(), array[1]);
+            }
+        } else {
+            // different types/sizes, so this should be an array
+            m_data.emplace<std::vector<json>>(elems);
+        }
+    }
 
     // TODO: not actually noexcept as long as we are using std::unordered_map
     json(const json&) noexcept = default;
@@ -107,6 +110,35 @@ public:
 
     [[nodiscard]] auto operator==(const json& other) const noexcept -> bool {
         return m_data == other.m_data;
+    }
+
+    [[nodiscard]] auto operator==(std::nullptr_t other) const noexcept -> bool {
+        return type() == type::null && *null() == other;
+    }
+
+    template<typename T> requires (std::is_arithmetic_v<T> && !std::same_as<bool, T>)
+    [[nodiscard]] auto operator==(T other) const noexcept -> bool {
+        return type() == type::number && *number() == static_cast<double>(other);
+    }
+
+    [[nodiscard]] auto operator==(bool other) const noexcept -> bool {
+        return type() == type::boolean && *boolean() == other;
+    }
+
+    [[nodiscard]] auto operator==(const std::string& other) const noexcept -> bool {
+        return type() == type::string && *string() == other;
+    }
+
+    [[nodiscard]] auto operator==(std::string_view other) const noexcept -> bool {
+        return type() == type::string && *string() == other;
+    }
+
+    [[nodiscard]] auto operator==(const char* other) const noexcept -> bool {
+        return type() == type::string && *string() == other;
+    }
+
+    [[nodiscard]] auto operator==(const std::vector<json>& other) const noexcept -> bool {
+        return type() == type::array && *array() == other;
     }
 
     [[nodiscard]] auto type() const noexcept -> type {
@@ -193,17 +225,17 @@ public:
         }
     }
 
-    [[nodiscard]] auto object() const noexcept -> optional_ref<const std::unordered_map<std::string, json>> {
+    [[nodiscard]] auto object() const noexcept -> optional_ref<const detail::hash_map<json>> {
         if (type() == type::object) {
-            return std::get<std::unordered_map<std::string, json>>(m_data);
+            return std::get<detail::hash_map<json>>(m_data);
         } else {
             return {};
         }
     }
 
-    [[nodiscard]] auto object() noexcept -> optional_ref<std::unordered_map<std::string, json>> {
+    [[nodiscard]] auto object() noexcept -> optional_ref<detail::hash_map<json>> {
         if (type() == type::object) {
-            return std::get<std::unordered_map<std::string, json>>(m_data);
+            return std::get<detail::hash_map<json>>(m_data);
         } else {
             return {};
         }
@@ -243,16 +275,16 @@ private:
         bool,
         std::string,
         std::vector<json>,
-        std::unordered_map<std::string, json>
+        detail::hash_map<json>
     > m_data;
 };
 
 inline auto array() noexcept -> json {
-    return json{ std::initializer_list<json>{} };
+    return json{ json::type::array };
 }
 
 inline auto object() noexcept -> json {
-    return json{ std::initializer_list<std::pair<const std::string, json>>{} };
+    return json{ json::type::object };
 }
 } // namespace serpp::json
 
