@@ -39,6 +39,8 @@ cmake-build-debug-visual-studio/**/*
 cmake-build-release-visual-studio/**/*
 cmake-build-debug-system/**/*
 cmake-build-release-system/**/*
+cmake-build-debug-mingw/**/*
+cmake-build-release-mingw/**/*
 .cache/**/*
 .idea/**/*
 **/.DS_Store
