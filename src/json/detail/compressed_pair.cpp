@@ -15,4 +15,4 @@
  * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "serpp/json/jobject.hpp"
+#include "serpp/json/detail/compressed_pair.hpp"

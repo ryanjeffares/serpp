@@ -23,7 +23,7 @@
 #include <type_traits>
 
 namespace serpp {
-template<typename T, template<typename...> typename Template>
+template<typename, template<typename...> typename>
 inline constexpr bool is_specialisation_v = false;
 
 template<template<typename...> typename Template, typename... Ts>
@@ -33,7 +33,7 @@ template<typename T, template<typename...> typename Template>
 concept is_specialisation_of = is_specialisation_v<T, Template>;
 
 template<typename T, template<typename...> typename Template>
-concept is_not_specialisation_of = !is_specialisation_v<T, Template>;
+concept is_not_specialisation_of = !is_specialisation_of<T, Template>;
 
 template<typename T, typename U>
 concept equality_comparable_with = requires {

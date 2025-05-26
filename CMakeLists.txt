@@ -18,6 +18,8 @@ add_library(
         serpp
 
         ${CMAKE_CURRENT_SOURCE_DIR}/src/json/detail/array.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/json/detail/compressed_pair.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/json/detail/hash_map.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/json/jarray.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/json/jobject.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/json/jvalue.cpp

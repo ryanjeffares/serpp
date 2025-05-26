@@ -16,3 +16,14 @@
  */
 
 #include "serpp/json/jobject.hpp"
+#include "serpp/json/jvalue.hpp"
+
+#include <catch2/catch_test_macros.hpp>
+
+namespace serpp::tests {
+TEST_CASE("Test jobject", "[json]") {
+    using namespace json;
+
+    jobject object;
+}
+}// namespace serpp::tests

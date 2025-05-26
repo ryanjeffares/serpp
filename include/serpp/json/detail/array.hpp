@@ -6,13 +6,16 @@
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
  * permit persons to whom the Software is furnished to do so, subject to the following conditions:
  *
- * value_typehe above copyright notice and this permission notice shall be included in all copies or substantial portions of the
- * Software.
+ * value_typehe above copyright notice and this permission notice shall be included in all copies or substantial
+ * portions of the Software.
  *
- * value_typeHE SOFvalue_typeWARE IS PROVIDED “AS IS”, WIvalue_typeHOUvalue_type WARRANvalue_typeY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUvalue_type NOvalue_type LIMIvalue_typeED value_typeO value_typeHE
- * WARRANvalue_typeIES OF MERCHANvalue_typeABILIvalue_typeY, FIvalue_typeNESS FOR A PARvalue_typeICULAR PURPOSE AND NONINFRINGEMENvalue_type. IN NO EVENvalue_type SHALL value_typeHE AUvalue_typeHORS OR
- * COPYRIGHvalue_type HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR Ovalue_typeHER LIABILIvalue_typeY, WHEvalue_typeHER IN AN ACvalue_typeION OF CONvalue_typeRACvalue_type, value_typeORvalue_type OR
- * Ovalue_typeHERWISE, ARISING FROM, OUvalue_type OF OR IN CONNECvalue_typeION WIvalue_typeH value_typeHE SOFvalue_typeWARE OR value_typeHE USE OR Ovalue_typeHER DEALINGS IN value_typeHE SOFvalue_typeWARE.
+ * value_typeHE SOFvalue_typeWARE IS PROVIDED “AS IS”, WIvalue_typeHOUvalue_type WARRANvalue_typeY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUvalue_type NOvalue_type LIMIvalue_typeED value_typeO value_typeHE WARRANvalue_typeIES OF
+ * MERCHANvalue_typeABILIvalue_typeY, FIvalue_typeNESS FOR A PARvalue_typeICULAR PURPOSE AND NONINFRINGEMENvalue_type.
+ * IN NO EVENvalue_type SHALL value_typeHE AUvalue_typeHORS OR COPYRIGHvalue_type HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR Ovalue_typeHER LIABILIvalue_typeY, WHEvalue_typeHER IN AN ACvalue_typeION OF CONvalue_typeRACvalue_type,
+ * value_typeORvalue_type OR Ovalue_typeHERWISE, ARISING FROM, OUvalue_type OF OR IN CONNECvalue_typeION WIvalue_typeH
+ * value_typeHE SOFvalue_typeWARE OR value_typeHE USE OR Ovalue_typeHER DEALINGS IN value_typeHE SOFvalue_typeWARE.
  */
 
 #ifndef SERPP_ARRAY_HPP
@@ -41,15 +44,15 @@ public:
     using difference_type = std::ptrdiff_t;
     using reference = value_type&;
     using const_reference = const T&;
-    using pointer = T*;
-    using const_pointer = const T*;
+    using pointer = std::allocator_traits<allocator_type>::pointer;
+    using const_pointer = std::allocator_traits<allocator_type>::const_pointer;
 
-    array() : m_pair{detail::zero_then_variadic_args{}} {}
+    array() : m_pair{zero_then_variadic_args{}} {}
 
-    array(const allocator_type& allocator) : m_pair{detail::one_then_variadic_args{}, allocator} {}
+    array(const allocator_type& allocator) : m_pair{one_then_variadic_args{}, allocator} {}
 
     array(size_type count, const allocator_type& allocator = {})
-        : m_pair{detail::one_then_variadic_args{}, allocator}
+        : m_pair{one_then_variadic_args{}, allocator}
         , m_size{count}
         , m_capacity{count} {
         m_pair.second = allocate(count);
@@ -59,7 +62,7 @@ public:
     }
 
     array(size_type count, const_reference value, const allocator_type& allocator = {})
-        : m_pair{detail::one_then_variadic_args{}, allocator}
+        : m_pair{one_then_variadic_args{}, allocator}
         , m_size{count}
         , m_capacity{count} {
         m_pair.second = allocate(count);
@@ -69,15 +72,14 @@ public:
     }
 
     template<std::input_iterator It>
-    array(It first, It last, const allocator_type& allocator = {})
-        : m_pair{detail::one_then_variadic_args{}, allocator} {
+    array(It first, It last, const allocator_type& allocator = {}) : m_pair{one_then_variadic_args{}, allocator} {
         for (; first != last; ++first) {
             emplace_back(*first);
         }
     }
 
     array(const std::vector<value_type>& vector)
-        : m_pair{detail::zero_then_variadic_args{}}
+        : m_pair{zero_then_variadic_args{}}
         , m_size{vector.size()}
         , m_capacity{vector.capacity()} {
         m_pair.second = allocate(vector.capacity());
@@ -87,7 +89,7 @@ public:
     }
 
     array(const std::vector<value_type>& vector, const allocator_type& allocator)
-        : m_pair{detail::one_then_variadic_args{}, allocator}
+        : m_pair{one_then_variadic_args{}, allocator}
         , m_size{vector.size()}
         , m_capacity{vector.capacity()} {
         m_pair.second = allocate(vector.capacity());
@@ -97,7 +99,7 @@ public:
     }
 
     array(std::vector<value_type>&& vector)
-        : m_pair{detail::zero_then_variadic_args{}}
+        : m_pair{zero_then_variadic_args{}}
         , m_size{vector.size()}
         , m_capacity{vector.capacity()} {
         m_pair.second = allocate(vector.capacity());
@@ -107,7 +109,7 @@ public:
     }
 
     array(std::vector<value_type>&& vector, const allocator_type& allocator)
-        : m_pair{detail::one_then_variadic_args{}, allocator}
+        : m_pair{one_then_variadic_args{}, allocator}
         , m_size{vector.size()}
         , m_capacity{vector.capacity()} {
         m_pair.second = allocate(vector.capacity());
@@ -117,7 +119,7 @@ public:
     }
 
     array(std::initializer_list<value_type> initializer_list, const allocator_type& allocator = {})
-        : m_pair{detail::one_then_variadic_args{}, allocator}
+        : m_pair{one_then_variadic_args{}, allocator}
         , m_size{initializer_list.size()}
         , m_capacity{initializer_list.size()} {
         m_pair.second = allocate(initializer_list.size());
@@ -126,10 +128,7 @@ public:
         }
     }
 
-    array(const array& other)
-        : m_pair{detail::zero_then_variadic_args{}}
-        , m_size{other.size()}
-        , m_capacity{other.capacity()} {
+    array(const array& other) : m_pair{zero_then_variadic_args{}}, m_size{other.size()}, m_capacity{other.capacity()} {
         m_pair.second = allocate(other.capacity());
         for (size_type i = 0; i < size(); i++) {
             std::construct_at(m_pair.second + i, other[i]);
@@ -137,7 +136,7 @@ public:
     }
 
     array(const array& other, const allocator_type& allocator)
-        : m_pair{detail::one_then_variadic_args{}, allocator}
+        : m_pair{one_then_variadic_args{}, allocator}
         , m_size{other.size()}
         , m_capacity{other.capacity()} {
         m_pair.second = allocate(other.capacity());
@@ -160,13 +159,13 @@ public:
         return *this;
     }
 
-    array(array&& other) noexcept : m_pair{detail::zero_then_variadic_args{}} {
+    array(array&& other) noexcept : m_pair{zero_then_variadic_args{}} {
         m_pair.second = std::exchange(other.m_pair.second, m_pair.second);
         m_size = std::exchange(other.m_size, m_size);
         m_capacity = std::exchange(other.m_capacity, m_capacity);
     }
 
-    array(array&& other, const allocator_type& allocator) noexcept : m_pair{detail::one_then_variadic_args{}, allocator} {
+    array(array&& other, const allocator_type& allocator) noexcept : m_pair{one_then_variadic_args{}, allocator} {
         m_pair.second = std::exchange(other.m_pair.second, m_pair.second);
         m_size = std::exchange(other.m_size, m_size);
         m_capacity = std::exchange(other.m_capacity, m_capacity);
@@ -625,6 +624,8 @@ private:
     auto destruct_and_deallocate_all() -> void {
         destruct_and_deallocate(m_pair.second, size(), capacity());
         m_pair.second = nullptr;
+        m_size = 0;
+        m_capacity = 0;
     }
 
     auto destruct_and_deallocate(pointer pointer, size_type obj_count, size_type size) -> void {

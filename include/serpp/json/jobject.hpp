@@ -18,19 +18,14 @@
 #ifndef SERPP_JOBJECT_HPP
 #define SERPP_JOBJECT_HPP
 
+#include "detail/hash_map.hpp"
+
 #include <string>
-#include <unordered_map>
 
 namespace serpp::json {
 class jvalue;
 
-class jobject {
-public:
-    [[nodiscard]] auto operator==(const jobject& other) const noexcept -> bool;
-
-private:
-    std::unordered_map<std::string, jvalue> m_data;
-};
+using jobject = detail::hash_map<std::string, jvalue>;
 }// namespace serpp::json
 
 #endif// #ifndef SERPP_JOBJECT_HPP
